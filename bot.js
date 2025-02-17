@@ -1,94 +1,109 @@
+const { createCanvas, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
-const { createCanvas, loadImage } = require('canvas');
-const fs = require('fs');
+const { Readable } = require('stream');
 
-// Вставьте сюда ваш токен
-const token = '7843124311:AAE_3yGN6Nk64GKT58sU4I5w0KVDy988JdQ';
-const bot = new TelegramBot(token, { polling: true });
+const TOKEN = '7843124311:AAE_3yGN6Nk64GKT58sU4I5w0KVDy988JdQ';
+const bot = new TelegramBot(TOKEN, { polling: true });
 
-// Путь к исходному изображению
-const IMAGE_PATH = 'base_image.png';
+const FONT_PATH = 'Montserrat.ttf'; // Указываем путь к файлу шрифта
+registerFont(FONT_PATH, { family: 'CustomFont' }); // Регистрируем шрифт
 
-// Цвета для текста
-const COLORS = {
-    "Красный": "#FF0000",
-    "Зеленый": "#00FF00",
-    "Синий": "#0000FF",
-    "Желтый": "#FFFF00",
-};
+const users = {};
 
-// Обработчик команды /start
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    const keyboard = {
-        keyboard: [["Красный", "Зеленый"], ["Синий", "Желтый"]],
-        one_time_keyboard: true,
-    };
-    bot.sendMessage(chatId, "Привет! Выбери цвет текста:", {
-        reply_markup: keyboard,
-    });
-    // Сохраняем состояние выбора цвета
-    bot.userData = bot.userData || {};
-    bot.userData[chatId] = { waitingForColor: true };
-});
-
-// Обработчик текстовых сообщений
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
-    const userText = msg.text;
+    const text = msg.text;
 
-    if (!bot.userData[chatId]) {
-        bot.userData[chatId] = {};
+    if (text === '/start') {
+        return sendStartMessage(chatId);
     }
 
-    // Проверяем, ожидаем ли мы выбор цвета
-    if (bot.userData[chatId].waitingForColor) {
-        if (COLORS[userText]) {
-            // Сохраняем выбранный цвет
-            bot.userData[chatId].color = COLORS[userText];
-            bot.userData[chatId].waitingForColor = false;
-            bot.sendMessage(chatId, "Теперь отправь текст, который нужно нанести на изображение.");
-        } else {
-            bot.sendMessage(chatId, "Пожалуйста, выбери цвет из предложенных кнопок.");
+    if (!users[chatId] || !users[chatId].waitingForText) return;
+
+    users[chatId].text = text;
+    users[chatId].waitingForText = false;
+    
+    bot.sendMessage(chatId, 'Выберите тип продукта:', {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Экран уличный', callback_data: '#FF9500' }, { text: 'Экран для помещения', callback_data: '#30B0C7' }],
+                [{ text: 'Медиафасад', callback_data: '#AF52DE' }, { text: 'Дорожные табло', callback_data: '#FF2D55' }],
+                [{ text: 'Видеопилон', callback_data: '#A2845E' }, { text: 'Медиакуб', callback_data: '#34C759' }],
+                [{ text: 'Другое', callback_data: '#5856D6' }],
+            ]
         }
-    } else {
-        // Получаем цвет из контекста
-        const color = bot.userData[chatId].color || "#FFFF00"; // По умолчанию желтый
-        const outputPath = "output_image.png";
+    });
+});
 
-        // Наносим текст на изображение
-        await addTextToImage(userText, color, outputPath);
+bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id;
+    const color = query.data;
+    
+    if (!users[chatId] || !users[chatId].text) return;
+    
+    const text = users[chatId].text;
 
-        // Отправляем изображение пользователю
-        bot.sendPhoto(chatId, fs.readFileSync(outputPath));
+    try {
+        const size = 1280; // Размер фона
+        const rectSize = 1120; // Размер квадрата
+        const radius = 330; // Радиус закругления углов
+        const paddingX = (size - rectSize) / 2;
+        const paddingY = (size - rectSize) / 2;
 
-        // Удаляем временное изображение
-        fs.unlinkSync(outputPath);
+        const canvas = createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+
+        // Фон (цвет, выбранный пользователем)
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, size, size);
+
+        // Белый квадрат с закругленными углами
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.moveTo(paddingX + radius, paddingY);
+        ctx.lineTo(paddingX + rectSize - radius, paddingY);
+        ctx.quadraticCurveTo(paddingX + rectSize, paddingY, paddingX + rectSize, paddingY + radius);
+        ctx.lineTo(paddingX + rectSize, paddingY + rectSize - radius);
+        ctx.quadraticCurveTo(paddingX + rectSize, paddingY + rectSize, paddingX + rectSize - radius, paddingY + rectSize);
+        ctx.lineTo(paddingX + radius, paddingY + rectSize);
+        ctx.quadraticCurveTo(paddingX, paddingY + rectSize, paddingX, paddingY + rectSize - radius);
+        ctx.lineTo(paddingX, paddingY + radius);
+        ctx.quadraticCurveTo(paddingX, paddingY, paddingX + radius, paddingY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Текст (такого же цвета, как фон)
+        ctx.font = 'bold 340px "CustomFont"';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, size / 2, size / 2);
+
+        // Отправляем изображение
+        const buffer = canvas.toBuffer('image/png');
+        const stream = Readable.from(buffer);
+        await bot.sendPhoto(chatId, stream);
+
+        sendStartMessage(chatId); // Запуск заново
+    } catch (error) {
+        bot.sendMessage(chatId, 'Ошибка при обработке изображения.');
+        console.error(error);
     }
 });
 
-// Функция для нанесения текста на изображение
-async function addTextToImage(text, color, outputPath) {
-    // Загружаем изображение
-    const image = await loadImage(IMAGE_PATH);
-    const canvas = createCanvas(image.width, image.height);
-    const ctx = canvas.getContext('2d');
-
-    // Рисуем изображение на холсте
-    ctx.drawImage(image, 0, 0);
-
-    // Настройки шрифта
-    const { registerFont } = require('canvas');
-    registerFont('Montserrat.ttf', { family: 'Semibold' }); 
-    ctx.font = '30px Montserrat';
-    ctx.fillStyle = color;
-
-    // Рисуем текст на изображении
-    ctx.fillText(text, 10, 50);
-
-    // Сохраняем изображение
-    const out = fs.createWriteStream(outputPath);
-    const stream = canvas.createPNGStream();
-    stream.pipe(out);
-    out.on('finish', () => console.log('Изображение сохранено.'));
+function sendStartMessage(chatId) {
+    users[chatId] = { text: '', color: 'black', waitingForText: false };
+    bot.sendMessage(chatId, 'Чтобы создать изображение, нажмите кнопку ниже:', {
+        reply_markup: {
+            inline_keyboard: [[{ text: 'Старт', callback_data: 'start' }]]
+        }
+    });
 }
+
+bot.on('callback_query', (query) => {
+    const chatId = query.message.chat.id;
+    if (query.data === 'start') {
+        users[chatId].waitingForText = true;
+        bot.sendMessage(chatId, 'Введите последние 4 цифры номера проекта.\n\Например: 00ФР-00[0225]');
+    }
+});
