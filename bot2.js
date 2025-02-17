@@ -25,11 +25,12 @@ bot.on('message', async (msg) => {
     
     users[chatId].text = text;
     users[chatId].waitingForText = false;
-    bot.sendMessage(chatId, 'Выберите цвет текста:', {
+    bot.sendMessage(chatId, 'Выберите тип продукта:', {
         reply_markup: {
             inline_keyboard: [
-                [{ text: 'Черный', callback_data: 'black' }, { text: 'Белый', callback_data: 'white' }],
-                [{ text: 'Красный', callback_data: 'red' }, { text: 'Синий', callback_data: 'blue' }]
+                [{ text: 'Экран уличный', callback_data: '#FF9500' }, { text: 'Экран для помещения', callback_data: '#30B0C7' }],
+                [{ text: 'Медиафасад', callback_data: '#AF52DE' }, { text: 'Дорожные табло', callback_data: '#FF2D55' }],
+                [{ text: 'Видеопилон', callback_data: '#A2845E' }, { text: 'Медиакуб', callback_data: '#34C759' }]
             ]
         }
     });
