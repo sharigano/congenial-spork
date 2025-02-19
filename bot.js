@@ -30,6 +30,7 @@ bot.on('message', async (msg) => {
                 [{ text: 'Медиафасад', callback_data: '#AF52DE' }, { text: 'Дорожные табло', callback_data: '#FF2D55' }],
                 [{ text: 'Видеопилон', callback_data: '#A2845E' }, { text: 'Медиакуб', callback_data: '#34C759' }],
                 [{ text: 'Другое', callback_data: '#5856D6' }],
+                [{ text: 'Закрытый проект', callback_data: '#626262' }],
             ]
         }
     });
