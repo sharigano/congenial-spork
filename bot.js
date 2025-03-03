@@ -2,8 +2,9 @@ const { createCanvas, loadImage, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
 const { Readable } = require('stream');
 
-const TOKEN = '7209878207:AAE122wsge0m77tG2adrlcC6EFpriqsNh0Q';
+const { TOKEN } = require('./config'); // Импорт токена
 const bot = new TelegramBot(TOKEN, { polling: true });
+
 
 const FONT_PATH = 'Montserrat.ttf';
 registerFont(FONT_PATH, { family: 'CustomFont' });
