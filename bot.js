@@ -1,12 +1,24 @@
-const { createCanvas, registerFont } = require('canvas');
+const { createCanvas, loadImage, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
 const { Readable } = require('stream');
 
-const TOKEN = '7843124311:AAE_3yGN6Nk64GKT58sU4I5w0KVDy988JdQ';
+const TOKEN = '7209878207:AAE122wsge0m77tG2adrlcC6EFpriqsNh0Q';
 const bot = new TelegramBot(TOKEN, { polling: true });
 
-const FONT_PATH = 'Montserrat.ttf'; // Указываем путь к файлу шрифта
-registerFont(FONT_PATH, { family: 'CustomFont' }); // Регистрируем шрифт
+const FONT_PATH = 'Montserrat.ttf';
+registerFont(FONT_PATH, { family: 'CustomFont' });
+
+const IMAGE_DATA = {
+    'Экран уличный': { image: 'images/street_screen.png', color: '#28b7dd' },
+    'Экран для помещения': { image: 'images/indoor_screen.png', color: '#efa329' },
+    'Медиафасад': { image: 'images/media_facade.png', color: '#ff2d55' },
+    'Дорожные табло': { image: 'images/road_sign.png', color: '#af52de' },
+    'Видеопилон': { image: 'images/video_pilon.png', color: '#8fd130' },
+    'Медиакуб': { image: 'images/media_cube.png', color: '#22c6a6' },
+    'Другое': { image: 'images/other.png', color: '#5856D6' },
+    'Закрытый проект, на гарантии': { image: 'images/closed_project_on_varanty.png', color: '#2645bb' },
+    'Закрытый проект, гарантия окончена': { image: 'images/closed_project_varanty_over.png', color: '#2645bb' },
+};
 
 const users = {};
 
@@ -14,78 +26,60 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
 
-    if (text === '/start') {
-        return sendStartMessage(chatId);
+    if (text === '/start' || text === 'Старт') {
+        users[chatId] = { waitingForText: true };
+        return bot.sendMessage(chatId, 'Введите последние 4 цифры номера проекта.\nНапример: 00ФР-00[0225]', {
+            reply_markup: { remove_keyboard: true },
+        });
     }
 
-    if (!users[chatId] || !users[chatId].waitingForText) return;
+    if (users[chatId]?.waitingForText) {
+        users[chatId].text = text;
+        users[chatId].waitingForText = false;
 
-    users[chatId].text = text;
-    users[chatId].waitingForText = false;
-    
-    bot.sendMessage(chatId, 'Выберите тип продукта:', {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: 'Экран уличный', callback_data: '#FF9500' }, { text: 'Экран для помещения', callback_data: '#30B0C7' }],
-                [{ text: 'Медиафасад', callback_data: '#AF52DE' }, { text: 'Дорожные табло', callback_data: '#FF2D55' }],
-                [{ text: 'Видеопилон', callback_data: '#A2845E' }, { text: 'Медиакуб', callback_data: '#34C759' }],
-                [{ text: 'Другое', callback_data: '#5856D6' }],
-                [{ text: 'Закрытый проект', callback_data: '#626262' }],
-            ]
-        }
-    });
-});
+        return bot.sendMessage(chatId, 'Выберите тип продукта:', {
+            reply_markup: {
+                keyboard: [
+                    ['Экран уличный', 'Экран для помещения'],
+                    ['Медиафасад', 'Дорожные табло'],
+                    ['Видеопилон', 'Медиакуб'],
+                    ['Другое'],
+                    ['Закрытый проект, на гарантии', 'Закрытый проект, гарантия окончена'],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+            }
+        });
+    }
 
-bot.on('callback_query', async (query) => {
-    const chatId = query.message.chat.id;
-    const color = query.data;
-    
-    if (!users[chatId] || !users[chatId].text) return;
-    
-    const text = users[chatId].text;
+    if (!users[chatId]?.text) return;
+
+    const product = IMAGE_DATA[text];
+    if (!product) return; // Если пользователь ввел текст, не соответствующий кнопкам, игнорируем
 
     try {
-        const size = 1280; // Размер фона
-        const rectSize = 1120; // Размер квадрата
-        const radius = 330; // Радиус закругления углов
-        const paddingX = (size - rectSize) / 2;
-        const paddingY = (size - rectSize) / 2;
-
+        const size = 1000;
         const canvas = createCanvas(size, size);
         const ctx = canvas.getContext('2d');
 
-        // Фон (цвет, выбранный пользователем)
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, size, size);
+        // Загружаем фоновое изображение
+        const backgroundImage = await loadImage(product.image);
+        ctx.drawImage(backgroundImage, 0, 0, size, size);
 
-        // Белый квадрат с закругленными углами
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.moveTo(paddingX + radius, paddingY);
-        ctx.lineTo(paddingX + rectSize - radius, paddingY);
-        ctx.quadraticCurveTo(paddingX + rectSize, paddingY, paddingX + rectSize, paddingY + radius);
-        ctx.lineTo(paddingX + rectSize, paddingY + rectSize - radius);
-        ctx.quadraticCurveTo(paddingX + rectSize, paddingY + rectSize, paddingX + rectSize - radius, paddingY + rectSize);
-        ctx.lineTo(paddingX + radius, paddingY + rectSize);
-        ctx.quadraticCurveTo(paddingX, paddingY + rectSize, paddingX, paddingY + rectSize - radius);
-        ctx.lineTo(paddingX, paddingY + radius);
-        ctx.quadraticCurveTo(paddingX, paddingY, paddingX + radius, paddingY);
-        ctx.closePath();
-        ctx.fill();
-
-        // Текст (такого же цвета, как фон)
-        ctx.font = 'bold 340px "CustomFont"';
-        ctx.fillStyle = color;
+        // Текст
+        ctx.font = 'bold 250px "CustomFont"';
+        ctx.fillStyle = product.color;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, size / 2, size / 2);
+        ctx.fillText(users[chatId].text, 500, 770
+        );
 
         // Отправляем изображение
         const buffer = canvas.toBuffer('image/png');
         const stream = Readable.from(buffer);
         await bot.sendPhoto(chatId, stream);
 
-        sendStartMessage(chatId); // Запуск заново
+        sendStartMessage(chatId);
     } catch (error) {
         bot.sendMessage(chatId, 'Ошибка при обработке изображения.');
         console.error(error);
@@ -93,18 +87,11 @@ bot.on('callback_query', async (query) => {
 });
 
 function sendStartMessage(chatId) {
-    users[chatId] = { text: '', color: 'black', waitingForText: false };
-    bot.sendMessage(chatId, 'Чтобы создать изображение, нажмите кнопку ниже:', {
+    bot.sendMessage(chatId, 'Чтобы создать новое изображение, нажмите "Старт".', {
         reply_markup: {
-            inline_keyboard: [[{ text: 'Старт', callback_data: 'start' }]]
+            keyboard: [[{ text: 'Старт' }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
         }
     });
 }
-
-bot.on('callback_query', (query) => {
-    const chatId = query.message.chat.id;
-    if (query.data === 'start') {
-        users[chatId].waitingForText = true;
-        bot.sendMessage(chatId, 'Введите последние 4 цифры номера проекта.\n\Например: 00ФР-00[0225]');
-    }
-});
